@@ -31,16 +31,34 @@
           </button>
           <!-- Sidebar -->
           <div class="sidebar bg-dark text-white p-3" :class="{ active: sidebarOpen }">
-            <h4>Cart</h4>
+            <h4>Cart <i class="bi bi-bag"></i></h4>
             <hr />
             <h3>List Orders</h3>
             <div class="item">
               <div class="row">
-                <div v-for="(order, i) in orders" :key="i" class="item-box d-flex justify-content-between">
-                  <span>{{ order.name }} </span>
-                  <span>{{ `Rp.${order.price}` }}</span>
+                <div v-for="(order, i) in orders" :key="i" class="item-box  mb-2">
+                  <div class="text-price-item d-flex justify-content-between">
+                    <span>{{ order.name }} <br> ukuran:
+                      {{ order.ukuran }}
+                    </span>
+                    <span>{{ `Rp.${order.originalPrice}` }}</span>
+                  </div>
+                  <div class="btn qty">
+                    <button class="btn btn-sm btn-outline-warning" @click="decreaseQty(order)">-</button>
+                    x{{ order.qty }}
+                    <button class="btn btn-sm btn-outline-success" @click="increaseQty(order)">+</button>
+                    <button class="btn btn-sm btn-outline-danger ms-2" @click="deleteOrders(order)">Hapus</button>
+                  </div>
                 </div>
               </div>
+            </div>
+            <hr>
+            <div class="mt-3">
+              <strong>Total: Rp.{{ this.totalPrice }}</strong>
+            </div>
+            <hr>
+            <div class="col-12 btn-payment">
+              <button class="btn btn-success w-100">Payment</button>
             </div>
           </div>
           <!-- klik luar untuk tutup -->
@@ -117,12 +135,12 @@
   </div>
 
   <!-- content -->
-  <div class="container-fluid col-11 d-flex justify-content-center mt-5">
+  <div class="container-fluid col-11 d-flex justify-content-center mt-3">
     <div id="search" class="row">
       <!-- Search -->
       <div class="search col-12">
         <h3 class="text-center text-white">Explore Product</h3>
-        <input type="text" class="form-control mb-2" v-model="keyword" placeholder="Cari" :onchange="searchItem()" />
+        <input type="text" class="form-control mb-2" v-model="keyword" placeholder="Cari" :input="searchItem()" />
       </div>
       <div class="col-12 col-sm-6 col-md-3 mb-3" v-for="(item, index) in filterItem" :key="index">
         <div class="card card-bg">
@@ -131,16 +149,7 @@
           <div id="product" class="card-body">
             <h5 class="card-title text-center">{{ item.name }}</h5>
             <p class="card-text text-center">{{ `Rp.${item.price}` }}</p>
-            <div class="col-12 d-flex justify-content-center">
-              <select v-if="item.name.includes('baju') || item.name.includes('hijab')" name="ukuran" id="ukuran"
-                v-model="ukuran[index]" class="form-control">
-                <option value="">Choose</option>
-                <option v-for="(ukuran, i) in ukurans" :key="i" :value="ukuran.value">
-                  {{ ukuran.name }}
-                </option>
-              </select>
-            </div>
-            <button class="btn btn-bg-card col-12 mt-2" @click="addToCart(item, index)">
+            <button class="btn btn-bg-card col-12 mt-2" @click="addToCart(item.id, index, item)">
               Add to cart
             </button>
           </div>
@@ -161,9 +170,9 @@
           </div>
           <div class="modal-body d-flex justify-content-center">
             <img :src="detailProduct.photo" alt="" style="height: 200px" />
-            <div class="varian">
-              <div class="item-varian col-4 col-sm-4 col-md-4">
-                <img :src="detailProduct.childs" alt="" style="height: 100px" />
+            <div class="varian ms-2">
+              <div class="item-varian col-4 col-sm-4 col-md-4" v-for="(img, index) in photoVarian[0]" :key="index">
+                <img :src="img" alt="" style="height: 100px" />
               </div>
             </div>
           </div>
@@ -171,7 +180,6 @@
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
               Close
             </button>
-            <button type="button" class="btn btn-primary">Save changes</button>
           </div>
         </div>
       </div>
@@ -224,56 +232,58 @@ export default {
       galery: [],
       keyword: "",
       filterItem: [],
-      ukurans: [
-        { value: "s", name: "S" },
-        { value: "m", name: "M" },
-        { value: "l", name: "L" },
-        { value: "xl", name: "XL" },
-      ],
-      ukuran: {},
-      detailProduct: "",
+      // ukurans: [
+      //   { value: "s", name: "S" },
+      //   { value: "m", name: "M" },
+      //   { value: "l", name: "L" },
+      //   { value: "xl", name: "XL" },
+      // ],
+      // ukuran: {},
+      detailProduct: '',
       productId: "",
       orders: [],
-      carouselProduct: []
+      carouselProduct: [],
+      photoVarian: []
     };
+  },
+  computed: {
+    totalPrice() {
+      return this.orders.reduce((total, order) => total + order.price, 0);
+    },
   },
   mounted() {
     this.getProduct();
-    this.getProductVariant();
   },
   methods: {
     toggleSidebar() {
       this.sidebarOpen = !this.sidebarOpen;
     },
-    addToCart(item, index) {
-      const selectedSize = this.ukuran[index];
+    addToCart(id, item) {
+      //memfilter item menyesuaikan id (ini bentuk array)
 
-      if (!selectedSize) {
-        Swal.fire({
-          title: "Silahkan pilih ukuran dahulu",
-          icon: "warning",
-        });
-        return;
+      let items = this.filterItem.filter((item) => item.id == id)[0];
+      //mengambil object (sekarang sudah jadi Object)
+      let orderItem = Object.assign({}, items);
+      orderItem.originalPrice = items.price // key originalPrice dibuat untuk logika perhitungan ytang dikalikan qty
+
+      //untuk mendapatkan qty, melakukan map data indexOfArray
+      let arrayIndex = this.orders.map(e => e.id).indexOf(orderItem.id)
+      // console.log(arrayIndex)
+
+      if (arrayIndex != -1) {//jika index bukan -1 maka qty akan ditambah 
+        // disini ditambahkan qty lansung melalui code berikut
+        this.orders[arrayIndex].qty++
+        //untuk price akan di kali dengan qty
+        this.orders[arrayIndex].price = this.orders[arrayIndex].originalPrice * this.orders[arrayIndex].qty
+      } else {//jika -1 maka push ke array oders
+        //memasukan qty kedalam object yang ada di variabel orderItem
+        orderItem.qty = 1
+        this.orders.push(orderItem)
       }
 
-      let order = {
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        ukuran: selectedSize,
-      };
+    }
 
-      let exists = this.orders.some(
-        (order) => order.id === item.id && order.ukuran === selectedSize
-      );
-      if (exists) {
-        alert("Item sudah ada di keranjang dengan ukuran yang sama");
-        return;
-      }
-      this.orders.push(order);
-      this.ukuran[index] = "";
-
-    },
+    ,
     getProduct() {
       axios
         .get("https://sistemtoko.com/public/demo/product", {
@@ -299,21 +309,33 @@ export default {
         item.name.toLowerCase().includes(this.keyword.toLowerCase())
       );
     },
-    getProductVariant() {
-      axios
-        .get("https://sistemtoko.com/public/demo/varian/" + this.productId)
-        .then((response) => {
-          console.log(response.data);
-        })
-        .catch(function (error) {
-          console.log(error);
-        });
-    },
-    detailBtn(item) {
+    detailBtn(item, id) {
       // console.log(item.id)
       this.productId = item.id;
+      this.photoVarian = this.products.filter((v) => v.id === item.id).map((v) => v.photos)
       this.detailProduct = item;
     },
+    decreaseQty(item) {
+      // dapat array [0]
+      let arrayIndex = this.orders.map(e => e.id).indexOf(item.id)
+
+      if (this.orders[arrayIndex].qty > 1) {
+        this.orders[arrayIndex].qty--
+        this.orders[arrayIndex].price = this.orders[arrayIndex].originalPrice * this.orders[arrayIndex].qty
+      } else {
+        this.orders.splice(arrayIndex, 1)
+      }
+    },
+    increaseQty(item) {
+      let arrayIndex = this.orders.map(e => e.id).indexOf(item.id)
+
+      this.orders[arrayIndex].qty++
+      this.orders[arrayIndex].price = this.orders[arrayIndex].originalPrice * this.orders[arrayIndex].qty
+    },
+    deleteOrders(item){
+      let arrayIndex = this.orders.map((i)=>i.id).indexOf(item.id)
+      this.orders.splice(arrayIndex, 1)
+    }
   },
 };
 </script>
