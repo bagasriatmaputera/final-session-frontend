@@ -41,7 +41,7 @@
                     <span>{{ order.name }} <br> ukuran:
                       {{ order.ukuran }}
                     </span>
-                    <span>{{ `Rp.${order.originalPrice}` }}</span>
+                    <span>{{ `Rp.${order.price}` }}</span>
                   </div>
                   <div class="btn qty">
                     <button class="btn btn-sm btn-outline-warning" @click="decreaseQty(order)">-</button>
@@ -54,11 +54,11 @@
             </div>
             <hr>
             <div class="mt-3">
-              <strong>Total: Rp.{{ this.totalPrice }}</strong>
+              <strong>Total: Rp.{{ total }}</strong>
             </div>
             <hr>
             <div class="col-12 btn-payment">
-              <button class="btn btn-success w-100">Payment</button>
+              <button class="btn btn-success w-100" @click="bayar()">Payment</button>
             </div>
           </div>
           <!-- klik luar untuk tutup -->
@@ -82,21 +82,21 @@
     </div>
     <div class="carousel-inner">
       <div class="carousel-item active">
-        <img :src="this.carouselProduct[0]" class="d-block w-100" alt="..." />
+        <img :src="this.carouselProduct[1]" class="d-block w-100" alt="..." />
         <div class="carousel-caption d-none d-md-block">
           <h5>Selamat Datang di Toko Kami!</h5>
           <p>Temukan produk terbaik dengan penawaran menarik setiap hari.</p>
         </div>
       </div>
       <div class="carousel-item">
-        <img :src="this.carouselProduct[1]" class="d-block w-100" alt="..." />
+        <img :src="this.carouselProduct[2]" class="d-block w-100" alt="..." />
         <div class="carousel-caption d-none d-md-block">
           <h5>Promo Spesial Bulan Ini!</h5>
           <p>Dapatkan diskon hingga 50% untuk produk pilihan. Jangan lewatkan kesempatan ini!</p>
         </div>
       </div>
       <div class="carousel-item">
-        <img :src="this.carouselProduct[2]" class="d-block w-100" alt="..." />
+        <img :src="this.carouselProduct[0]" class="d-block w-100" alt="..." />
         <div class="carousel-caption d-none d-md-block">
           <h5>Promo Spesial Bulan Ini!</h5>
           <p>Dapatkan diskon hingga 50% untuk produk pilihan. Jangan lewatkan kesempatan ini!</p>
@@ -149,7 +149,7 @@
           <div id="product" class="card-body">
             <h5 class="card-title text-center">{{ item.name }}</h5>
             <p class="card-text text-center">{{ `Rp.${item.price}` }}</p>
-            <button class="btn btn-bg-card col-12 mt-2" @click="addToCart(item.id, index, item)">
+            <button class="btn btn-bg-card col-12 mt-2" @click="addToCart(item.id, index, item); toggleSidebar">
               Add to cart
             </button>
           </div>
@@ -170,9 +170,9 @@
           </div>
           <div class="modal-body d-flex justify-content-center">
             <img :src="detailProduct.photo" alt="" style="height: 200px" />
-            <div class="varian ms-2">
-              <div class="item-varian col-4 col-sm-4 col-md-4" v-for="(img, index) in photoVarian[0]" :key="index">
-                <img :src="img" alt="" style="height: 100px" />
+            <div class="Tipe">
+              <div v-for="(child, index) in childPhoto" :key="index" class="col-md-6 mb-2">
+                <img :src="child" alt="image" style="height: 100px">
               </div>
             </div>
           </div>
@@ -243,20 +243,44 @@ export default {
       productId: "",
       orders: [],
       carouselProduct: [],
-      photoVarian: []
+      photoVarian: [],
+      childItems: [],
+      childPhoto: [],
+      total: 0
+
     };
-  },
-  computed: {
-    totalPrice() {
-      return this.orders.reduce((total, order) => total + order.price, 0);
-    },
   },
   mounted() {
     this.getProduct();
   },
   methods: {
+    bayar() {
+      alert('Yeay')
+    },
     toggleSidebar() {
       this.sidebarOpen = !this.sidebarOpen;
+    },
+    getProduct() {
+      axios
+        .get("https://sistemtoko.com/public/demo/product", {
+          params: {
+            page: 1,
+            sorting: "Latest",
+            categories: "all",
+            search_name: "none",
+          },
+        })
+        .then((response) => {
+          // console.log(response)
+          this.products = response.data.aaData;
+          this.carouselProduct = this.products.map((item) => item.photo).slice(5, 8)
+          //ambil childs di products
+          this.childItems = this.products.map(item => item.childs).flat()
+        })
+        .catch(function (error) {
+          console.log(error);
+          alert('error network may use better network')
+        });
     },
     addToCart(id, item) {
       //memfilter item menyesuaikan id (ini bentuk array)
@@ -264,7 +288,8 @@ export default {
       let items = this.filterItem.filter((item) => item.id == id)[0];
       //mengambil object (sekarang sudah jadi Object)
       let orderItem = Object.assign({}, items);
-      orderItem.originalPrice = items.price // key originalPrice dibuat untuk logika perhitungan ytang dikalikan qty
+      orderItem.originalPrice = Number(parseInt(items.price.toString().replace(/\./g, ''))) // key originalPrice dibuat untuk logika perhitungan ytang dikalikan qty
+
 
       //untuk mendapatkan qty, melakukan map data indexOfArray
       let arrayIndex = this.orders.map(e => e.id).indexOf(orderItem.id)
@@ -281,28 +306,20 @@ export default {
         this.orders.push(orderItem)
       }
 
-    }
+      let orderPrice = this.orders.map(e => Number(String(e.price).replace(/[.,]/g, match => match === ',' ? '.' : '')))
+      // console.log(orderPrice)
+      let priceTotal = 0
 
-    ,
-    getProduct() {
-      axios
-        .get("https://sistemtoko.com/public/demo/product", {
-          params: {
-            page: 1,
-            sorting: "Latest",
-            categories: "all",
-            search_name: "none",
-          },
-        })
-        .then((response) => {
-          // console.log(response)
-          this.products = response.data.aaData;
-          this.carouselProduct = this.products.map((item) => item.photo).slice(4, 7)
-        })
-        .catch(function (error) {
-          console.log(error);
-          alert('error network may use better network')
-        });
+      orderPrice.forEach(order => {
+        priceTotal += order
+      })
+      this.total = priceTotal
+
+      // sidebarOpen when clik add to cart
+      this.sidebarOpen = !this.sidebarOpen;
+
+
+
     },
     searchItem() {
       this.filterItem = this.products.filter((item) =>
@@ -313,29 +330,60 @@ export default {
       // console.log(item.id)
       this.productId = item.id;
       this.photoVarian = this.products.filter((v) => v.id === item.id).map((v) => v.photos)
+      this.childPhoto = this.childItems.filter((o) => o.name === item.name).map((v) => v.photo)
       this.detailProduct = item;
     },
     decreaseQty(item) {
       // dapat array [0]
       let arrayIndex = this.orders.map(e => e.id).indexOf(item.id)
+      // console.log(arrayIndex);
 
+      // console.log(this.orders[arrayIndex].qty);
       if (this.orders[arrayIndex].qty > 1) {
         this.orders[arrayIndex].qty--
         this.orders[arrayIndex].price = this.orders[arrayIndex].originalPrice * this.orders[arrayIndex].qty
       } else {
         this.orders.splice(arrayIndex, 1)
       }
+
+      let orderPrice = this.orders.map(e => e.price)
+      let priceTotal = 0
+
+      orderPrice.forEach(order => {
+        priceTotal += order
+      })
+
+      this.total = priceTotal
     },
     increaseQty(item) {
       let arrayIndex = this.orders.map(e => e.id).indexOf(item.id)
 
       this.orders[arrayIndex].qty++
       this.orders[arrayIndex].price = this.orders[arrayIndex].originalPrice * this.orders[arrayIndex].qty
+
+      let orderPrice = this.orders.map(e => e.price)
+      let priceTotal = 0
+
+      orderPrice.forEach(order => {
+        priceTotal += order
+      })
+
+      this.total = priceTotal
     },
-    deleteOrders(item){
-      let arrayIndex = this.orders.map((i)=>i.id).indexOf(item.id)
+    deleteOrders(item) {
+      let arrayIndex = this.orders.map((i) => i.id).indexOf(item.id)
       this.orders.splice(arrayIndex, 1)
-    }
+
+      let orderPrice = this.orders.map(e => e.price)
+      let priceTotal = 0
+
+      orderPrice.forEach(order => {
+        priceTotal += order
+      })
+
+      this.total = priceTotal
+    },
+
   },
 };
 </script>
